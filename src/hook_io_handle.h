@@ -101,11 +101,13 @@ public:
      * @param value 
      */
     void write(const K& key, const V& value) {
-        rw_spin_lock_.read_lock();
+        // rw_spin_lock_.read_lock();
+        mtx_.lock();
         ConcurrentHashMap<K, V>* ball = choose_ball_ ? &ball_01_ : &ball_02_;
         ball->insert_and_inc(key, value);
         data_count_++;
-        rw_spin_lock_.read_unlock();
+        // rw_spin_lock_.read_unlock();
+        mtx_.unlock();
     }
 
     /**
@@ -121,11 +123,13 @@ public:
         // 因此不用放在锁内
         choose_ball_ ? ball_02_.clear() : ball_01_.clear();
         // 这个读写自旋锁中，写锁中的临界区比较小，效率高
-        rw_spin_lock_.write_lock();
+        // rw_spin_lock_.write_lock();
+        mtx_.lock();
         ConcurrentHashMap<K, V>* res = choose_ball_ ? &ball_01_ : &ball_02_;
         choose_ball_ = !choose_ball_;
         data_count_ = 0;
-        rw_spin_lock_.write_unlock();
+        // rw_spin_lock_.write_unlock();
+        mtx_.unlock();
         // 到这里，已经切换了球，所有的写线程去写另外一个球了，所以操作这个球是线程安全的
         return *res;
     }
@@ -142,7 +146,8 @@ public:
     void lock_prefork() {
         // 这里只需要对 rw_spin_lock_ 加锁即可，无需对两个球加锁
         // 因为能给 rw_spin_lock_ 加到锁，两个球内部不会有线程访问，也不会有锁，锁处于释放状态
-        rw_spin_lock_.write_lock();
+        // rw_spin_lock_.write_lock();
+        mtx_.lock();
     }
 
     /**
@@ -150,7 +155,8 @@ public:
      * 
      */
     void lock_postfork_parent() {
-        rw_spin_lock_.write_unlock();
+        // rw_spin_lock_.write_unlock();
+        mtx_.unlock();
     }
 
     /**
@@ -158,7 +164,8 @@ public:
      * 
      */
     void lock_postfork_child() {
-        rw_spin_lock_.write_unlock();
+        // rw_spin_lock_.write_unlock();
+        mtx_.unlock();
     }
 
 private:
@@ -166,7 +173,8 @@ private:
     ConcurrentHashMap<K, V> ball_01_;
     ConcurrentHashMap<K, V> ball_02_;
     // 读写自旋锁
-    RWSpinLock rw_spin_lock_;
+    // RWSpinLock rw_spin_lock_;
+    std::mutex mtx_;
     // 当前数据池中数据的数量
     volatile uint64_t data_count_;
 };
@@ -278,7 +286,7 @@ private:
      * @param file_name 
      * @return std::string 
      */
-    std::string combine_key(uint64_t tid, const std::string& file_name);
+    inline std::string combine_key(uint64_t tid, const std::string& file_name);
 
     /**
      * @brief 分解 key

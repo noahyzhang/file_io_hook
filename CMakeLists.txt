@@ -23,9 +23,15 @@ file(GLOB EXAMPLE_SRC
     examples/example.cpp 
 )
 
+file(GLOB BENCHMARK_NORMAL
+    test/benchmark/test.cpp
+)
+
 add_library(default_hook SHARED ${DEFAULT_HOOK_SRC})
 add_library(io_hook SHARED ${IO_HOOK_SRC})
 add_executable(example ${EXAMPLE_SRC})
+add_executable(benchmark_normal ${BENCHMARK_NORMAL})
+add_executable(benchmark_hook ${BENCHMARK_NORMAL})
 
 target_link_libraries(io_hook
     pthread
@@ -33,6 +39,16 @@ target_link_libraries(io_hook
 )
 
 target_link_libraries(example
+    default_hook
+)
+
+target_link_libraries(benchmark_hook
+    pthread
+    io_hook
+)
+
+target_link_libraries(benchmark_normal
+    pthread
     default_hook
 )
 

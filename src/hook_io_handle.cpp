@@ -115,10 +115,11 @@ const std::vector<FileInfo>& FileIoInfoHandler::consume_and_parse() {
     return file_io_info_vec;
 }
 
-std::string FileIoInfoHandler::combine_key(uint64_t tid, const std::string& file_name) {
-    std::stringstream oss;
-    oss << tid << SEPARATOR_CHAR << file_name;
-    return oss.str();
+inline std::string FileIoInfoHandler::combine_key(uint64_t tid, const std::string& file_name) {
+    // std::stringstream oss;
+    // oss << tid << SEPARATOR_CHAR << file_name;
+    // return oss.str();
+    return std::to_string(tid) + SEPARATOR_CHAR + file_name;
 }
 
 int FileIoInfoHandler::divide_key(const std::string& key, uint64_t* tid, std::string* file_name) {

@@ -15,7 +15,8 @@
 #include <atomic>
 #include <thread>
 #include <vector>
-#include "rw_spin_lock.h"
+#include <mutex>
+// #include "rw_spin_lock.h"
 
 namespace file_io_hook {
 
@@ -187,17 +188,20 @@ public:
      */
     bool find(const K& key, V& value) {
         // 加读锁
-        rw_spin_lock_.read_lock();
+        // rw_spin_lock_.read_lock();
+        mtx_.lock();
         HashNode<K, V>* node = head_;
         for (; node != nullptr;) {
             if (node->get_key() == key) {
                 value = node->get_value();
-                rw_spin_lock_.read_unlock();
+                // rw_spin_lock_.read_unlock();
+                mtx_.unlock();
                 return true;
             }
             node = node->next_;
         }
-        rw_spin_lock_.read_unlock();
+        // rw_spin_lock_.read_unlock();
+        mtx_.unlock();
         return false;
     }
 
@@ -209,7 +213,8 @@ public:
      */
     void insert(const K& key, const V& value) {
         // 加写锁
-        rw_spin_lock_.write_lock();
+        // rw_spin_lock_.write_lock();
+        mtx_.lock();
         HashNode<K, V>* prev = nullptr, *node = head_;
         for (; node != nullptr && node->get_key() != key;) {
             prev = node;
@@ -228,7 +233,8 @@ public:
             // 桶中存在 key，直接修改
             node->set_value(value);
         }
-        rw_spin_lock_.write_unlock();
+        // rw_spin_lock_.write_unlock();
+        mtx_.unlock();
     }
 
     /**
@@ -239,7 +245,8 @@ public:
      */
     void insert_and_inc(const K& key, const V& value) {
         // 加写锁
-        rw_spin_lock_.write_lock();
+        // rw_spin_lock_.write_lock();
+        mtx_.lock();
         HashNode<K, V>* prev = nullptr, *node = head_;
         for (; node != nullptr && node->get_key() != key;) {
             prev = node;
@@ -258,7 +265,8 @@ public:
             // 桶中存在 key，给他增加
             node->get_value() += value;
         }
-        rw_spin_lock_.write_unlock();
+        // rw_spin_lock_.write_unlock();
+        mtx_.unlock();
     }
 
     /**
@@ -268,7 +276,8 @@ public:
      */
     void erase(const K& key) {
         // 加写锁
-        rw_spin_lock_.write_lock();
+        // rw_spin_lock_.write_lock();
+        mtx_.lock();
         HashNode<K, V>* prev = nullptr, *node = head_;
         for (; node != nullptr && node->get_key() != key;) {
             prev = node;
@@ -276,7 +285,8 @@ public:
         }
         // key 没有找到，直接返回
         if (node == nullptr) {
-            rw_spin_lock_.write_unlock();
+            // rw_spin_lock_.write_unlock();
+            mtx_.unlock();
             return;
         } else {
             // 找到 key，分情况处理
@@ -288,7 +298,8 @@ public:
             }
             delete node;
         }
-        rw_spin_lock_.write_unlock();
+        // rw_spin_lock_.write_unlock();
+        mtx_.unlock();
     }
 
     /**
@@ -297,7 +308,8 @@ public:
      */
     void clear() {
         // 加写锁
-        rw_spin_lock_.write_lock();
+        // rw_spin_lock_.write_lock();
+        mtx_.lock();
         HashNode<K, V>* prev = nullptr, *node = head_;
         for (; node != nullptr;) {
             prev = node;
@@ -305,7 +317,8 @@ public:
             delete prev;
         }
         head_ = nullptr;
-        rw_spin_lock_.write_unlock();
+        // rw_spin_lock_.write_unlock();
+        mtx_.unlock();
     }
 
 public:
@@ -319,7 +332,8 @@ public:
      * 避免多线程遇到多进程时锁
      */
     void lock_prefork() {
-        rw_spin_lock_.write_lock();
+        // rw_spin_lock_.write_lock();
+        mtx_.lock();
     }
 
     /**
@@ -327,7 +341,8 @@ public:
      * 
      */
     void lock_postfork_parent() {
-        rw_spin_lock_.write_unlock();
+        // rw_spin_lock_.write_unlock();
+        mtx_.unlock();
     }
 
     /**
@@ -335,7 +350,8 @@ public:
      * 
      */
     void lock_postfork_child() {
-        rw_spin_lock_.write_unlock();
+        // rw_spin_lock_.write_unlock();
+        mtx_.unlock();
     }
 
 public:
@@ -346,7 +362,8 @@ private:
     // 自旋读写锁
     // 这里替换掉 pthread_rwlock_t 系统提供的读写锁
     // 原因是系统读写锁性能不佳，自旋时不释放 CPU，CPU 占有会冲高
-    RWSpinLock rw_spin_lock_;
+    // RWSpinLock rw_spin_lock_;
+    std::mutex mtx_;
 };
 
 /**
