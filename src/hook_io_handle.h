@@ -81,7 +81,7 @@ struct FileInfo {
  * 同时，也将数据更进一层抽象化，对外屏蔽掉双球模型的细节。
  * 只提供写和读的接口保证数据的安全
  */
-template <typename K, typename V>
+template <typename K, typename V, typename F = std::hash<K>>
 struct DoubleBallModule {
 public:
     DoubleBallModule() = default;
@@ -103,7 +103,7 @@ public:
     void write(const K& key, const V& value) {
         // rw_spin_lock_.read_lock();
         mtx_.lock();
-        ConcurrentHashMap<K, V>* ball = choose_ball_ ? &ball_01_ : &ball_02_;
+        ConcurrentHashMap<K, V, F>* ball = choose_ball_ ? &ball_01_ : &ball_02_;
         ball->insert_and_inc(key, value);
         data_count_++;
         // rw_spin_lock_.read_unlock();
@@ -118,14 +118,14 @@ public:
      * 
      * @return const ConcurrentHashMap<K, V>& 
      */
-    ConcurrentHashMap<K, V>& read_and_switch() {
+    ConcurrentHashMap<K, V, F>& read_and_switch() {
         // 此时所有的写线程都在操作球 A，我们对球 B 进行清理。没有竞争，这是线程安全的
         // 因此不用放在锁内
         choose_ball_ ? ball_02_.clear() : ball_01_.clear();
         // 这个读写自旋锁中，写锁中的临界区比较小，效率高
         // rw_spin_lock_.write_lock();
         mtx_.lock();
-        ConcurrentHashMap<K, V>* res = choose_ball_ ? &ball_01_ : &ball_02_;
+        ConcurrentHashMap<K, V, F>* res = choose_ball_ ? &ball_01_ : &ball_02_;
         choose_ball_ = !choose_ball_;
         data_count_ = 0;
         // rw_spin_lock_.write_unlock();
@@ -170,8 +170,8 @@ public:
 
 private:
     volatile bool choose_ball_ = true;
-    ConcurrentHashMap<K, V> ball_01_;
-    ConcurrentHashMap<K, V> ball_02_;
+    ConcurrentHashMap<K, V, F> ball_01_;
+    ConcurrentHashMap<K, V, F> ball_02_;
     // 读写自旋锁
     // RWSpinLock rw_spin_lock_;
     std::mutex mtx_;
@@ -312,9 +312,32 @@ private:
             return *this;
         }
     };
+    struct DoubleBallModuleKey {
+        uint64_t tid;
+        std::string filename;
+        DoubleBallModuleKey(uint64_t tid, const std::string& filename)
+            : tid(tid), filename(filename) {}
+
+        bool operator==(const DoubleBallModuleKey& key) const {
+            return tid == key.tid && filename == key.filename;
+        }
+        bool operator!=(const DoubleBallModuleKey& key) const {
+            return !(*this == key);
+        }
+    };
+    struct DoubleBallModuleKeyHash {
+        std::size_t operator()(const DoubleBallModuleKey& obj) const {
+            std::size_t h1 = std::hash<uint64_t>()(obj.tid);
+            std::size_t h2 = std::hash<std::string>()(obj.filename);
+            return h1 ^ (h2 << 1);
+        }
+    };
+
+private:
     // 数据池子，只管写数据、读数据，无需关心线程安全性，已经保证
     // key 为 "tid + file_name"
-    DoubleBallModule<std::string, FileRWInfo> data_pool_;
+    // DoubleBallModule<std::shared_ptr<DoubleBallModuleKey>, FileRWInfo> data_pool_;
+    DoubleBallModule<DoubleBallModuleKey, FileRWInfo, DoubleBallModuleKeyHash> data_pool_;
     // 默认的数据池中最大的元素数量
     const uint64_t max_data_pool_size_ = DEFAULT_MAX_DATA_POOL_SIZE;
     // 存储文件描述符和文件名的对应关系

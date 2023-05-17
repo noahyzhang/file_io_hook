@@ -21,11 +21,11 @@
 namespace file_io_hook {
 
 // 默认的哈希桶的数量，注意取一个质数可以使哈希表有更好的性能
-#define DEFAULT_HASH_BUCKET_SIZE (1031)
+#define DEFAULT_HASH_BUCKET_SIZE (3037)
 
 template <typename K, typename V> class HashNode;
 template <typename K, typename V> class HashBucket;
-template <typename K, typename V> class ConstIterator;
+template <typename K, typename V, typename F> class ConstIterator;
 
 /**
  * @brief 线程安全的哈希表
@@ -112,8 +112,8 @@ public:
      * 
      * @return ConstIterator 
      */
-    ConstIterator<K, V> get_iterator() {
-        return ConstIterator<K, V>(this);
+    ConstIterator<K, V, F> get_iterator() {
+        return ConstIterator<K, V, F>(this);
     }
 
 public:
@@ -154,7 +154,7 @@ private:
     F hash_fn_;
     // 哈希桶的个数
     size_t hash_bucket_size_;
-    friend class ConstIterator<K, V>;
+    friend class ConstIterator<K, V, F>;
 };
 
 /**
@@ -444,12 +444,12 @@ private:
  * @tparam K 
  * @tparam V 
  */
-template <typename K, typename V>
+template <typename K, typename V, typename F>
 class ConstIterator {
 public:
     ConstIterator() = delete;
     ~ConstIterator() = default;
-    explicit ConstIterator(ConcurrentHashMap<K, V>* cmp) : cmp_(cmp) {
+    explicit ConstIterator(ConcurrentHashMap<K, V, F>* cmp) : cmp_(cmp) {
         for (; hash_node_ == nullptr && bucket_pos_ < cmp_->hash_bucket_size_;) {
             HashNode<K, V>* node = cmp_->hash_table_[bucket_pos_].head_;
             if (node != nullptr) {
@@ -554,7 +554,7 @@ public:
 
 private:
     // hash map 的指针
-    ConcurrentHashMap<K, V>* cmp_;
+    ConcurrentHashMap<K, V, F>* cmp_;
     // 当前处于那个 bucket 位置
     uint64_t bucket_pos_ = 0;
     // 当前指向的 node

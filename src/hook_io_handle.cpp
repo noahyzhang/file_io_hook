@@ -57,21 +57,21 @@ void FileIoInfoHandler::add_hook_info(FileOperateType type, int fd, size_t rw_si
         monitor_item.exceed_data_pool_size_drop_num++;
         return;
     }
-    auto tid = Util::get_tid();
+    uint64_t tid = Util::get_tid();
     std::string file_name;
     if (!fd_file_name_.find(fd, file_name)) {
         monitor_item.not_found_fd_file_name_num++;
         return;
     }
-    auto key = combine_key(tid, file_name);
     switch (type) {
     case READ_TYPE:
         monitor_item.read_func_call_num++;
-        data_pool_.write(key, FileRWInfo{rw_size, 0});
+        // data_pool_.write(std::make_shared<DoubleBallModuleKey>(tid, file_name), FileRWInfo{rw_size, 0});
+        data_pool_.write(DoubleBallModuleKey{tid, file_name}, FileRWInfo{rw_size, 0});
         break;
     case WRITE_TYPE:
         monitor_item.write_func_call_num++;
-        data_pool_.write(key, FileRWInfo{0, rw_size});
+        data_pool_.write(DoubleBallModuleKey{tid, file_name}, FileRWInfo{0, rw_size});
         break;
     default:
         break;
@@ -86,15 +86,18 @@ const std::vector<FileInfo>& FileIoInfoHandler::consume_and_parse() {
     }
     auto& io_data = data_pool_.read_and_switch();
     auto iter = io_data.get_iterator();
-    uint64_t tid = 0;
-    std::string file_name;
+    // uint64_t tid = 0;
+    // std::string file_name;
     for (; iter != nullptr; iter++) {
-        if (divide_key(iter->get_key(), &tid, &file_name) < 0) {
-            continue;
-        }
+        // if (!iter->get_key()) {
+        //     continue;
+        // }
+        // if (divide_key(iter->get_key(), &tid, &file_name) < 0) {
+        //     continue;
+        // }
         file_io_info_vec.emplace_back(FileInfo{
-            .tid = tid,
-            .file_name = file_name,
+            .tid = iter->get_key().tid,
+            .file_name = iter->get_key().filename,
             .read_b = iter->get_value().read_b,
             .write_b = iter->get_value().write_b});
     }
